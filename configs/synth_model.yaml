@@ -1,0 +1,4 @@
+latent_dim: 2
+epochs: 50
+batch_size: 32
+validation_threshold: 0.1

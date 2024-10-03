@@ -1,0 +1,20 @@
+causal_analysis:
+  propensity_score_matching:
+    enabled: true
+    covariates:
+      - 'Typical exercise activity'
+      - 'NPH insulin dose_rolling_std_5'
+      - 'Regular insulin dose_rolling_mean_7'
+      - 'Pre-breakfast blood glucose measurement_lag_1_rolling_std_7'
+      - 'Pre-lunch blood glucose measurement_lag_3'
+      - 'Pre-supper blood glucose measurement_rolling_std_3'
+    treatment_column: 'Hypoglycemic symptoms'
+
+  difference_in_differences:
+    enabled: true
+    pre_treatment_column: 'Pre-breakfast blood glucose measurement_lag_2_rolling_mean_3'
+    post_treatment_column: 'Pre-breakfast blood glucose measurement_rolling_mean_3_diff'
+    treatment_group_column: 'More-than-usual exercise activity_rolling_mean_3'
+    time_period_column: 'Event_0_rolling_std_7'
+
+  outcome_column: 'outcome'

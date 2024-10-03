@@ -1,0 +1,7 @@
+morphing_params:
+  step_size: 0.1
+  similarity_threshold: 0.9
+  constraints:
+    age: [0, 120]
+    weight: [30, 200]
+    # Add more constraints as needed

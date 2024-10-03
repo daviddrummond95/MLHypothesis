@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypothesis Generation Toolkit</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .swiss-transition {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 flex">
+    <aside class="w-64 bg-white shadow-md h-screen sticky top-0 overflow-y-auto">
+        <div class="p-6">
+            <h2 class="text-2xl font-semibold mb-6">Model Information</h2>
+            <div class="space-y-4">
+                <div>
+                    <h3 class="text-lg font-semibold mb-2 flex items-center">
+                        <i class="fas fa-cog mr-2 text-blue-500"></i>Model Type
+                    </h3>
+                    <p class="text-sm text-gray-600">{{ model_config.model_type }}</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-2 flex items-center">
+                        <i class="fas fa-list-ol mr-2 text-blue-500"></i>Number of Features
+                    </h3>
+                    <p class="text-sm text-gray-600">{{ num_features }}</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-2 flex items-center">
+                        <i class="fas fa-sliders-h mr-2 text-blue-500"></i>Model Parameters
+                    </h3>
+                    <ul class="text-sm text-gray-600">
+                        {% for key, value in model_config[model_config.model_type + '_params'].items() %}
+                            <li><strong>{{ key }}:</strong> {{ value }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-2 flex items-center">
+                        <i class="fas fa-chart-line mr-2 text-blue-500"></i>Evaluation Metrics
+                    </h3>
+                    {% for metric, value in pipeline_results.evaluation_metrics.items() %}
+                        <div class="mb-4">
+                            <p class="text-sm font-semibold text-gray-500 flex items-center">
+                                <i class="fas fa-{{ 'bullseye' if metric == 'accuracy' else 'check-circle' if metric == 'precision' else 'search' if metric == 'recall' else 'balance-scale' if metric == 'f1_score' else 'chart-area' }} mr-2 text-blue-500"></i>
+                                {{ metric|replace('_', ' ')|title }}
+                            </p>
+                            <p class="text-lg font-bold">
+                                {{ "%.4f"|format(value) if value is not none else "N/A" }}
+                            </p>
+                            <p class="text-xs text-gray-600 mt-1">
+                                {% if metric == 'accuracy' %}
+                                    Overall correctness of predictions.
+                                {% elif metric == 'precision' %}
+                                    Proportion of positive identifications that were actually correct.
+                                {% elif metric == 'recall' %}
+                                    Proportion of actual positives that were identified correctly.
+                                {% elif metric == 'f1_score' %}
+                                    Harmonic mean of precision and recall, providing a balanced measure.
+                                {% elif metric == 'roc_auc' %}
+                                    Model's ability to distinguish between classes across all thresholds.
+                                {% endif %}
+                            </p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col">
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">Hypothesis Generation</h1>
+                <a href="/hypotheses" class="text-blue-500 hover:text-blue-700 font-semibold">
+                    View All Hypotheses
+                </a>
+            </div>
+        </header>
+
+        <main class="flex-1 p-8">
+            <div class="grid grid-cols-1 gap-8 mb-12">
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-2xl font-semibold mb-6">Feature Importance</h2>
+                    <p class="text-sm text-gray-600 mb-4">Feature importance helps identify the most influential factors in predicting treatment response, guiding our hypothesis generation process.</p>
+                    <canvas id="featureImportanceChart"></canvas>
+                    <div class="mt-4 text-sm text-gray-600">
+                        <p>Features with higher importance scores have a stronger influence on the model's predictions, potentially revealing key factors in treatment outcomes.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-12">
+                <h2 class="text-2xl font-semibold mb-6">Generated Hypotheses</h2>
+                <div class="space-y-6" id="hypotheses-container">
+                    {% for hypothesis in hypotheses %}
+                        {% if hypothesis.validation_result != "Declined" %}
+                            <div id="hypothesis-{{ hypothesis.id }}" class="bg-white p-6 rounded-lg shadow-sm swiss-transition">
+                                <div class="flex justify-between items-start mb-4">
+                                    <h3 class="text-lg font-semibold">Hypothesis #{{ hypothesis.id }}</h3>
+                                    <span class="px-2 py-1 text-sm font-semibold rounded {% if hypothesis.validation_result == 'Approved' %}bg-green-100 text-green-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                                        {{ hypothesis.validation_result or 'Pending' }}
+                                    </span>
+                                </div>
+                                <div class="space-y-2 mb-4">
+                                    <p><span class="font-medium text-gray-500">Statement:</span> {{ hypothesis.statement or 'N/A' }}</p>
+                                    <p><span class="font-medium text-gray-500">Rationale:</span> {{ hypothesis.rationale or 'N/A' }}</p>
+                                    <p><span class="font-medium text-gray-500">Relevant Features:</span> 
+                                        {% if hypothesis.relevant_features %}
+                                            {{ hypothesis.relevant_features|join(', ') if hypothesis.relevant_features is iterable and hypothesis.relevant_features is not string else hypothesis.relevant_features }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </p>
+                                    <p><span class="font-medium text-gray-500">Expected Effect:</span> {{ hypothesis.expected_effect or 'N/A' }}</p>
+                                    <p><span class="font-medium text-gray-500">Confidence Level:</span> 
+                                        {% if hypothesis.confidence_level is not none %}
+                                            <span class="inline-block w-24 h-2 bg-gray-200 rounded-full overflow-hidden align-middle mr-2">
+                                                <span class="h-full bg-blue-500 block" style="width: {{ hypothesis.confidence_level * 100 }}%;"></span>
+                                            </span>
+                                            {{ "%.2f"|format(hypothesis.confidence_level) }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                
+                                <!-- LLM-generated insights -->
+                                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                                    <h4 class="text-md font-semibold mb-4">AI Analysis</h4>
+                                    <div class="space-y-4">
+                                        <div class="bg-white p-3 rounded-md shadow-sm">
+                                            <p class="font-medium text-gray-700 mb-2">Reasoning:</p>
+                                            <div class="text-sm text-gray-600">
+                                                {% if hypothesis.llm_reasoning %}
+                                                    {{ hypothesis.llm_reasoning|markdown|safe }}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="bg-white p-3 rounded-md shadow-sm">
+                                            <p class="font-medium text-gray-700 mb-2">Explanation:</p>
+                                            <div class="text-sm text-gray-600">
+                                                {% if hypothesis.llm_explanation %}
+                                                    {{ hypothesis.llm_explanation|markdown|safe }}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="bg-white p-3 rounded-md shadow-sm">
+                                            <p class="font-medium text-gray-700 mb-2">Validity:</p>
+                                            {% if hypothesis.llm_validity is not none %}
+                                                <span class="px-2 py-1 text-sm font-semibold rounded {% if hypothesis.llm_validity %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                                    {{ "Valid" if hypothesis.llm_validity else "Invalid" }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-sm text-gray-600">N/A</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex space-x-4 mt-4">
+                                    <button hx-post="/approve_hypothesis/{{ hypothesis.id }}"
+                                            hx-trigger="customApprove"
+                                            hx-target="#hypothesis-{{ hypothesis.id }}"
+                                            hx-swap="none"
+                                            hx-headers='{"Content-Type": "application/json"}'
+                                            onclick="approveHypothesis(event, {{ hypothesis.id }})"
+                                            class="flex-1 bg-white border border-green-500 text-green-500 font-semibold py-2 px-4 rounded swiss-transition hover:bg-green-500 hover:text-white">
+                                        Approve
+                                    </button>
+                                    <button hx-post="/decline_hypothesis/{{ hypothesis.id }}"
+                                            hx-target="#hypothesis-{{ hypothesis.id }}"
+                                            hx-swap="none"
+                                            class="flex-1 bg-white border border-red-500 text-red-500 font-semibold py-2 px-4 rounded swiss-transition hover:bg-red-500 hover:text-white">
+                                        Decline
+                                    </button>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-sm">
+                <h2 class="text-2xl font-semibold mb-6">Submit New Hypothesis</h2>
+                <form hx-post="/submit_hypothesis" hx-swap="outerHTML" class="space-y-4">
+                    <div>
+                        <label for="statement" class="block mb-1 font-medium text-gray-700">Statement:</label>
+                        <input type="text" id="statement" name="statement" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="rationale" class="block mb-1 font-medium text-gray-700">Rationale:</label>
+                        <textarea id="rationale" name="rationale" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+
+                    <div>
+                        <label for="relevant_features" class="block mb-1 font-medium text-gray-700">Relevant Features:</label>
+                        <input type="text" id="relevant_features" name="relevant_features" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="expected_effect" class="block mb-1 font-medium text-gray-700">Expected Effect:</label>
+                        <select id="expected_effect" name="expected_effect" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="increase">Increase</option>
+                            <option value="decrease">Decrease</option>
+                            <option value="difference">Difference</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="confidence_level" class="block mb-1 font-medium text-gray-700">Confidence Level:</label>
+                        <input type="range" id="confidence_level" name="confidence_level" min="0" max="1" step="0.01" value="0.5" class="w-full">
+                    </div>
+
+                    <button type="submit" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded swiss-transition hover:bg-blue-600">Submit Hypothesis</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // JavaScript to create the feature importance chart
+        const ctx = document.getElementById('featureImportanceChart').getContext('2d');
+        const featureImportance = {{ pipeline_results.feature_importance|tojson }};
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: featureImportance.map(item => item.feature),
+                datasets: [{
+                    label: 'Feature Importance',
+                    data: featureImportance.map(item => item.importance),
+                    backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true
+                    },
+                    y: {
+                        display: false
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                return featureImportance[context[0].dataIndex].feature;
+                            },
+                            label: function(context) {
+                                return `Importance: ${context.formattedValue}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        document.body.addEventListener('htmx:afterOnLoad', function(event) {
+            if (event.detail.elt.tagName === 'BUTTON' && event.detail.xhr.status === 200) {
+                const response = JSON.parse(event.detail.xhr.responseText);
+                const hypothesisCard = event.detail.elt.closest('[id^="hypothesis-"]');
+                
+                if (hypothesisCard) {
+                    // Create a temporary status message
+                    const statusMessage = document.createElement('div');
+                    statusMessage.textContent = response.message;
+                    statusMessage.className = 'p-4 mb-4 text-sm rounded-lg swiss-transition ' + 
+                        (event.detail.elt.textContent.trim() === 'Approve' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700');
+                    
+                    // Insert the status message before the hypothesis card
+                    hypothesisCard.parentNode.insertBefore(statusMessage, hypothesisCard);
+                    
+                    // Remove the hypothesis card
+                    hypothesisCard.remove();
+                    
+                    // Remove the status message after 2 seconds
+                    setTimeout(() => statusMessage.remove(), 2000);
+                }
+            }
+        });
+    </script>
+
+    <script>
+        function approveHypothesis(event, id) {
+            event.preventDefault();
+            const button = event.target;
+            
+            // Check if we've already prompted for a reason
+            if (!button.dataset.reasonProvided) {
+                const reason = prompt("Reason for approving?");
+                if (reason !== null) {
+                    button.setAttribute('hx-vals', JSON.stringify({reason: reason}));
+                    button.dataset.reasonProvided = 'true';
+                    // Trigger the custom event
+                    htmx.trigger(button, 'customApprove');
+                }
+            }
+        }
+
+        // Reset the reasonProvided flag after the request is completed
+        document.body.addEventListener('htmx:afterOnLoad', function(event) {
+            if (event.detail.elt.tagName === 'BUTTON' && event.detail.elt.dataset.reasonProvided) {
+                event.detail.elt.dataset.reasonProvided = 'false';
+            }
+        });
+    </script>
+</body>
+</html>

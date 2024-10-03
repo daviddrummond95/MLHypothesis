@@ -1,0 +1,17 @@
+model_type: "xgboost"  # or "random_forest" or "logistic_regression"
+xgboost_params:
+  learning_rate: 0.1
+  max_depth: 6
+  n_estimators: 100
+random_forest_params:
+  n_estimators: 100
+  max_depth: 10
+logistic_regression_params:
+  penalty: "l1"
+  solver: "liblinear"
+evaluation_metrics:
+  - "accuracy"
+  - "precision"
+  - "recall"
+  - "f1_score"
+  - "roc_auc"

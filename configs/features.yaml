@@ -1,0 +1,82 @@
+# General configuration
+datetime_column: 'DateTime'
+group_column: 'PatientID'
+
+# Feature groups
+feature_groups:
+  measurements:
+    - 'Unspecified blood glucose measurement'
+    - 'Pre-breakfast blood glucose measurement'
+    - 'Post-breakfast blood glucose measurement'
+    - 'Pre-lunch blood glucose measurement'
+    - 'Post-lunch blood glucose measurement'
+    - 'Pre-supper blood glucose measurement'
+    - 'Post-supper blood glucose measurement'
+    - 'Pre-snack blood glucose measurement'
+  interventions:
+    - 'Regular insulin dose'
+    - 'NPH insulin dose'
+    - 'UltraLente insulin dose'
+  events:
+    - 'Hypoglycemic symptoms'
+    - 'Typical meal ingestion'
+    - 'More-than-usual meal ingestion'
+    - 'Less-than-usual meal ingestion'
+    - 'Typical exercise activity'
+    - 'More-than-usual exercise activity'
+    - 'Less-than-usual exercise activity'
+    - 'Unspecified special event'
+
+# Feature engineering
+engineer_features:
+  total_insulin_dose:
+    - 'Regular insulin dose'
+    - 'NPH insulin dose'
+    - 'UltraLente insulin dose'
+
+# Temporal features
+temporal_features:
+  - name: time_since_start
+    type: time_since_start
+  - name: hour_of_day
+    type: hour_of_day
+  - name: day_of_week
+    type: day_of_week
+  - name: is_weekend
+    type: is_weekend
+  - name: event_proximity
+    type: event_proximity
+
+# Categorical encoding
+encode_categorical_features:
+  columns: 
+    - 'Event_1'
+    - 'Event_2'
+    - 'Event_3'
+    - 'Event_4'
+    - 'Event_5'
+
+# Binning
+bin_features:
+  - feature: 'Measurement_1'
+    bins: [0, 25, 50, 75, 'inf']
+    labels: ['Very Low', 'Low', 'Normal', 'High', 'Very High']
+
+# Normalization
+normalize_features:
+  - 'Intervention_1'
+  - 'Intervention_2'
+  - 'Intervention_3'
+
+# Feature exclusion
+exclude_features:
+  - 'RawMeasurement'
+  - 'NextMeasurement'
+
+# Time series features
+time_series_features:
+  create_lags: true
+  lag_values: [1, 2, 3]
+  rolling_windows: [3, 5, 7]
+  create_diffs: true
+  create_rolling: true
